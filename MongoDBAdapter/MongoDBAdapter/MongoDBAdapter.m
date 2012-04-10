@@ -9,35 +9,66 @@
 #import "MongoDBAdapter.h"
 #import "MongoDBUtilities.h"
 
+static dispatch_queue_t induction_mongo_adapter_queue() {
+    static dispatch_queue_t _induction_mongo_adapter_queue;
+    if (_induction_mongo_adapter_queue == NULL) {
+        _induction_mongo_adapter_queue = dispatch_queue_create("com.induction.mongo.adapter.queue", DISPATCH_QUEUE_SERIAL);
+    }
+    
+    return _induction_mongo_adapter_queue;
+}
+
 @implementation MongoDBAdapter
+
++ (NSString *)localizedName {
+    return NSLocalizedString(@"MongoDB", nil);
+}
 
 + (NSString *)primaryURLScheme {
     return @"mongodb";
 }
 
-+ (BOOL)canConnectWithURL:(NSURL *)url {
++ (BOOL)canConnectToURL:(NSURL *)url {
     return [[url scheme] isEqualToString:[self primaryURLScheme]] && [url host];
 }
 
-+ (id<DBConnection>)connectionWithURL:(NSURL *)url error:(NSError *__autoreleasing *)error {
-    return [[MongoDBConnection alloc] initWithURL:url];
++ (void)connectToURL:(NSURL *)url
+             success:(void (^)(id <DBConnection> connection))success
+             failure:(void (^)(NSError *error))failure
+{    
+    dispatch_async(induction_mongo_adapter_queue(), ^(void) {
+        MongoDBConnection *connection = [[MongoDBConnection alloc] initWithURL:url];
+        NSError *error = nil;    
+        BOOL connected = [connection open:&error];
+        
+        dispatch_async(dispatch_get_main_queue(), ^(void) {
+            if (connected) {
+                if (success) {
+                    success(connection);
+                }
+            } else {
+                if (failure) {
+                    failure(error);
+                }
+            }
+        });
+    });
 }
 
 @end
 
 #pragma mark -
 
-@interface MongoDBConnection ()
-@end
-
 @implementation MongoDBConnection {
 @public
     mongo_connection *_mongo_connection;
+    MongoDBDatabase *_database;
 @private
     __strong NSURL *_url;
 }
 
 @synthesize url = _url;
+@synthesize database = _database;
 
 - (id)initWithURL:(NSURL *)url {
     self = [super init];
@@ -50,8 +81,8 @@
     return self;
 }
 
-- (BOOL)open {
-    //    [self close];    
+- (BOOL)open:(NSError *__autoreleasing *)error {
+    [self close:nil];    
     
     mongo_connection_options options;
     strcpy(options.host, [[_url host] UTF8String]);
@@ -66,15 +97,19 @@
     if (_mongo_connection) {
         result = mongo_connect(_mongo_connection, &options);
         
+        // TODO: Default to correct database
+        _database = [[self availableDatabases] lastObject];
+        
         return YES;
     } else {
+        // TODO Error handling
         result = mongo_conn_fail;
         
         return NO;
     }
 }
 
-- (BOOL)close {
+- (BOOL)close:(NSError *__autoreleasing *)error {
     if (!_mongo_connection) {
         return NO;
     }
@@ -86,11 +121,27 @@
     return YES;
 }
 
-- (BOOL)reset {
+// TODO
+- (BOOL)reset:(NSError *__autoreleasing *)error {
     return NO;
 }
 
-- (NSArray *)databases {
+- (id <DBResultSet>)resultSetByRunningCommand:(id)command 
+                                   onDatabase:(MongoDBDatabase *)database
+                                        error:(NSError **)error
+{
+    return nil;
+}
+
+- (void)runCommand:(id)command 
+        onDatabase:(id <DBDatabase>)database
+           success:(void (^)(MongoDBResultSet *resultSet, NSTimeInterval elapsedTime))success
+           failure:(void (^)(NSError *error))failure
+{
+    return;
+}
+
+- (NSArray *)availableDatabases {
     bson queryBSON, outBSON;
     bson_buffer buffer;
     
@@ -147,7 +198,6 @@
     _connection = connection;
     _name = [attributes objectForKey:@"name"];
     
-    
     NSMutableArray *mutableCollections = [NSMutableArray array];
     bson queryBSON, fieldsBSON;
     const char *namespace = [[_name stringByAppendingString:@".system.namespaces"] UTF8String];
@@ -170,12 +220,24 @@
     return self;
 }
 
-- (NSOrderedSet *)dataSourceGroupNames {
-    return [NSOrderedSet orderedSetWithObject:NSLocalizedString(@"Collections", nil)];
+- (NSDictionary *)metadata {
+    return nil;
 }
 
-- (NSArray *)dataSourcesForGroupNamed:(NSString *)groupName {
-    return _collections;
+- (NSUInteger)numberOfDataSourceGroups {
+    return 1;
+}
+
+- (NSString *)dataSourceGroupAtIndex:(NSUInteger)index {
+    return NSLocalizedString(@"Collections", nil);
+}
+
+- (NSUInteger)numberOfDataSourcesInGroup:(NSString *)group {
+    return [_collections count];
+}
+
+- (id <DBDataSource>)dataSourceInGroup:(NSString *)group atIndex:(NSUInteger)index {
+    return [_collections objectAtIndex:index];
 }
 
 @end
@@ -187,6 +249,8 @@
     __strong MongoDBDatabase *_database;
     __strong NSString *_name;
 }
+
+@synthesize name = _name;
 
 - (id)initWithDatabase:(MongoDBDatabase *)database
             attributes:(NSDictionary *)attributes
@@ -220,29 +284,47 @@
 
 #pragma mark - DBExplorableDataSource
 
-- (id <DBResultSet>)resultSetForRecordsAtIndexes:(NSIndexSet *)indexes 
-                                          error:(NSError *__autoreleasing *)error 
+// TODO: Error Handling
+- (void)fetchResultSetForRecordsAtIndexes:(NSIndexSet *)indexes 
+                                  success:(void (^)(id<DBResultSet>))success 
+                                  failure:(void (^)(NSError *))failure
 {
-    bson_buffer buffer;
-    bson_buffer_init(&buffer);
-    BSONBufferFillFromDictionary(&buffer, [NSDictionary dictionary]);
-    
-    bson queryBSON;
-    bson_empty(&queryBSON);
-    bson_from_buffer(&queryBSON, &buffer);
-    
-    bson fieldsBSON;
-    bson_empty(&fieldsBSON);
-    
-    MongoDBConnection *connection = (MongoDBConnection *)_database.connection;
-    mongo_cursor *cursor;
-    cursor = mongo_find(connection->_mongo_connection, [self.namespace UTF8String], &queryBSON, &fieldsBSON, (int)[indexes count], (int)[indexes firstIndex], 0);
-    
-    bson_destroy(&fieldsBSON);
-    bson_destroy(&queryBSON);
-    //    bson_buffer_destroy(&buffer);
-    
-    return [[MongoDBResultSet alloc] initWithCursor:cursor];
+    dispatch_async(induction_mongo_adapter_queue(), ^{
+        bson_buffer buffer;
+        bson_buffer_init(&buffer);
+        BSONBufferFillFromDictionary(&buffer, [NSDictionary dictionary]);
+        
+        bson queryBSON;
+        bson_empty(&queryBSON);
+        bson_from_buffer(&queryBSON, &buffer);
+        
+        bson fieldsBSON;
+        bson_empty(&fieldsBSON);
+        
+        MongoDBConnection *connection = (MongoDBConnection *)_database.connection;
+        mongo_cursor *cursor;
+        cursor = mongo_find(connection->_mongo_connection, [self.namespace UTF8String], &queryBSON, &fieldsBSON, (int)[indexes count], (int)[indexes firstIndex], 0);
+        
+        bson_destroy(&fieldsBSON);
+        bson_destroy(&queryBSON);
+        //    bson_buffer_destroy(&buffer);
+        
+        MongoDBResultSet *resultSet = [[MongoDBResultSet alloc] initWithCursor:cursor];
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (success) {
+                success(resultSet);
+            }
+        });
+    });        
+}
+
+// TODO
+- (void)fetchResultSetForQuery:(NSString *)query 
+                       success:(void (^)(id<DBResultSet>, NSTimeInterval))success 
+                       failure:(void (^)(NSError *))failure 
+{
+    return;
 }
 
 @end

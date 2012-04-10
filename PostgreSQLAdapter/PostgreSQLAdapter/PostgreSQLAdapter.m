@@ -25,6 +25,15 @@
     #define TIMESTAMPTZOID  1184
 #endif
 
+static dispatch_queue_t induction_postgres_adapter_queue() {
+    static dispatch_queue_t _induction_postgres_adapter_queue;
+    if (_induction_postgres_adapter_queue == NULL) {
+        _induction_postgres_adapter_queue = dispatch_queue_create("com.induction.postgres.adapter.queue", DISPATCH_QUEUE_SERIAL);
+    }
+    
+    return _induction_postgres_adapter_queue;
+}
+
 NSString * const PostgreSQLErrorDomain = @"com.heroku.client.postgresql.error";
 
 static NSString * PostgreSQLConnectionStringFromURL(NSURL *url) {
@@ -82,18 +91,39 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
 
 @implementation PostgreSQLAdapter
 
++ (NSString *)localizedName {
+    return NSLocalizedString(@"Postgres", nil);
+}
+
 + (NSString *)primaryURLScheme {
     return @"postgres";
 }
 
-+ (BOOL)canConnectWithURL:(NSURL *)url {
++ (BOOL)canConnectToURL:(NSURL *)url {
     return [[url scheme] isEqualToString:@"postgres"];
 }
 
-+ (id <DBConnection>)connectionWithURL:(NSURL *)url 
-                                 error:(NSError **)error
-{
-    return [[PostgreSQLConnection alloc] initWithURL:url];
++ (void)connectToURL:(NSURL *)url
+             success:(void (^)(id <DBConnection> connection))success
+             failure:(void (^)(NSError *error))failure
+{    
+    dispatch_async(induction_postgres_adapter_queue(), ^(void) {
+        PostgreSQLConnection *connection = [[PostgreSQLConnection alloc] initWithURL:url];
+        NSError *error = nil;    
+        BOOL connected = [connection open:&error];
+        
+        dispatch_async(dispatch_get_main_queue(), ^(void) {
+            if (connected) {
+                if (success) {
+                    success(connection);
+                }
+            } else {
+                if (failure) {
+                    failure(error);
+                }
+            }
+        });
+    });
 }
 
 @end
@@ -102,13 +132,14 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
 @private
     void *_pgconn;
     __strong NSURL *_url;
+    __strong PostgreSQLDatabase *_database;
 }
 
 @end
 
 @implementation PostgreSQLConnection
 @synthesize url = _url;
-@dynamic databases;
+@synthesize database = _database;
 
 - (void)dealloc {
     if (_pgconn) {
@@ -128,69 +159,99 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
     return self;
 }
 
-- (BOOL)open {
-	[self close];
+- (BOOL)open:(NSError **)error {
+	[self close:nil];
     
 	_pgconn = (PGconn *)PQconnectdb([PostgreSQLConnectionStringFromURL(_url) UTF8String]);
     
-	if (PQstatus(_pgconn) == CONNECTION_BAD)  {
-        NSLog(@"Connection bad: %s", PQerrorMessage(_pgconn));
-        //		errorDescription = [NSString stringWithFormat:@"%s", PQerrorMessage(_pgconn)];
-        //		[errorDescription retain];
-        //        
-        //		NSLog(@"Connection to database '%@' failed.", dbName);
-        //		NSLog(@"\t%@", errorDescription);
-        //		[self appendSQLLog:[NSString stringWithFormat:@"Connection to database %@ Failed.\n", dbName]]; 
-        //		[self appendSQLLog:[NSString stringWithFormat:@"Connection string: %@\n\n", connectionString]]; 
-        //		// append error too??
-        //        
-        //		PQfinish(_pgconn);
-        //		_pgconn = nil;
-        //		isConnected = NO;
-        
+	if (PQstatus(_pgconn) != CONNECTION_OK) {
+        NSMutableDictionary *mutableUserInfo = [NSMutableDictionary dictionary];
+        [mutableUserInfo setValue:NSLocalizedString(@"Connection Error", nil) forKey:NSLocalizedDescriptionKey];
+        [mutableUserInfo setValue:[NSString stringWithUTF8String:PQerrorMessage(_pgconn)] forKey:NSLocalizedRecoverySuggestionErrorKey];
+        [mutableUserInfo setValue:_url forKey:NSURLErrorKey];
+
+        *error = [[NSError alloc] initWithDomain:PostgreSQLErrorDomain code:CONNECTION_BAD userInfo:mutableUserInfo];
+                
 		return NO;
     }
+
+    _database = [[PostgreSQLDatabase alloc] initWithConnection:self name:[NSString stringWithUTF8String:PQdb(_pgconn)] stringEncoding:NSUTF8StringEncoding];
 	
-    //	// set up notification
-    //	PQsetNoticeProcessor(_pgconn, handle_pq_notice, self);
-	
-    //	if (sqlLog != nil) {
-    //		[sqlLog release];
-    //	}
-    //	sqlLog = [[NSMutableString alloc] init];
-    //	[self appendSQLLog:[NSString stringWithFormat:@"Connected to database %@.\n", dbName]];
-    //	isConnected = YES;
 	return YES;
 }
 
-- (BOOL)close {
-    //	if (_pgconn == nil) { return NO; }
-    //	if (isConnected == NO) { return NO; }
-    //	
-    //	[self appendSQLLog:[NSString stringWithString:@"Disconnected from database.\n"]];
+- (BOOL)close:(NSError **)error {
+    if (!_pgconn) { 
+        return NO; 
+    }
+   
 	PQfinish(_pgconn);
-    //	_pgconn = nil;
-    //	isConnected = NO;
+    _pgconn = nil;
+
 	return YES;
 }
 
-- (BOOL)reset {
+- (BOOL)reset:(NSError **)error {
     PQreset(_pgconn);
     return PQstatus(_pgconn) == CONNECTION_OK;
 }
 
-- (id <SQLResultSet>)executeSQL:(NSString *)SQL 
-                          error:(NSError *__autoreleasing *)error 
+- (id <SQLResultSet>)resultSetByExecutingSQL:(NSString *)SQL 
+                                       error:(NSError *__autoreleasing *)error
 {
     PGresult *pgresult = PQexec(_pgconn, [SQL UTF8String]);
+    ExecStatusType status = PQresultStatus(pgresult);
+    switch (status) {
+        case PGRES_BAD_RESPONSE:
+        case PGRES_FATAL_ERROR:
+            *error = [[NSError alloc] initWithDomain:PostgreSQLErrorDomain code:status userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithUTF8String:PQresStatus(status)] forKey:NSLocalizedDescriptionKey]];
+            return nil;
+        default:
+            break;
+    }    
     
     return [[PostgreSQLResultSet alloc] initWithPGResult:pgresult];
 }
 
+- (void)executeSQL:(NSString *)SQL
+           success:(void (^)(id <SQLResultSet> resultSet, NSTimeInterval elapsedTime))success
+           failure:(void (^)(NSError *error))failure
+{
+    dispatch_async(induction_postgres_adapter_queue(), ^(void) {
+        CFAbsoluteTime startTime = CFAbsoluteTimeGetCurrent();
+        PGresult *pgresult = PQexec(_pgconn, [SQL UTF8String]);
+        CFAbsoluteTime endTime = CFAbsoluteTimeGetCurrent();
+        
+        ExecStatusType status = PQresultStatus(pgresult);
+        PostgreSQLResultSet *resultSet = nil;
+        NSError *error = nil;
+        switch (status) {
+            case PGRES_BAD_RESPONSE:
+            case PGRES_FATAL_ERROR:
+                error = [[NSError alloc] initWithDomain:PostgreSQLErrorDomain code:status userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithUTF8String:PQresStatus(status)] forKey:NSLocalizedDescriptionKey]];            
+                break;
+            default:
+                resultSet = [[PostgreSQLResultSet alloc] initWithPGResult:pgresult];
+                break;
+        }
+        
+        dispatch_async(dispatch_get_main_queue(), ^(void) {
+            if (error) {
+                if (failure) {
+                    failure(error);
+                }
+            } else {
+                if (success) {
+                    success(resultSet, (endTime - startTime));
+                }
+            }
+        });
+    });
+}
 
-- (NSArray *)databases {
+- (NSArray *)availableDatabases {
     NSMutableArray *mutableDatabases = [[NSMutableArray alloc] init];
-    [[[self executeSQL:@"SELECT * FROM pg_database ORDER BY datname ASC" error:nil] tuples] enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+    [[[self resultSetByExecutingSQL:@"SELECT * FROM pg_database ORDER BY datname ASC" error:nil] tuples] enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
         PostgreSQLDatabase *database = [[PostgreSQLDatabase alloc] initWithConnection:self name:[(id <SQLTuple>)obj valueForKey:@"datname"] stringEncoding:NSUTF8StringEncoding];
         [mutableDatabases addObject:database];
     }];
@@ -232,8 +293,7 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
     
     NSString *SQL = [NSString stringWithFormat:@"SELECT * FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name ASC"];
     NSMutableArray *mutableTables = [NSMutableArray array];
-    
-    [[[_connection executeSQL:SQL error:nil] tuples] enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+    [[[_connection resultSetByExecutingSQL:SQL error:nil] tuples] enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
         PostgreSQLTable *table = [[PostgreSQLTable alloc] initWithDatabase:self name:[(id <SQLTuple>)obj valueForKey:@"table_name"] stringEncoding:NSUTF8StringEncoding];
         [mutableTables addObject:table];
     }];
@@ -247,16 +307,24 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
     return _name;
 }
 
-- (NSOrderedSet *)dataSourceGroupNames {
-    return [NSOrderedSet orderedSetWithObject:NSLocalizedString(@"Tables", nil)];
+- (NSDictionary *)metadata {
+    return nil;
 }
 
-- (NSArray *)dataSourcesForGroupNamed:(NSString *)groupName {
-    if ([groupName isEqualToString:NSLocalizedString(@"Tables", nil)]) {
-        return self.tables;
-    } else {
-        return nil;
-    }
+- (NSUInteger)numberOfDataSourceGroups {
+    return 1;
+}
+
+- (NSString *)dataSourceGroupAtIndex:(NSUInteger)index {
+    return NSLocalizedString(@"Tables", nil);
+}
+
+- (NSUInteger)numberOfDataSourcesInGroup:(NSString *)group {
+    return [_tables count];
+}
+
+- (id <DBDataSource>)dataSourceInGroup:(NSString *)group atIndex:(NSUInteger)index {
+    return [_tables objectAtIndex:index];
 }
 
 @end
@@ -296,23 +364,52 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
 }
 
 - (NSUInteger)numberOfRecords {
-    return fmaxf([[[[[[_database connection] executeSQL:[NSString stringWithFormat:@"SELECT COUNT(*) FROM %@", _name] error:nil] recordsAtIndexes:[NSIndexSet indexSetWithIndex:0]] lastObject] valueForKey:@"count"] integerValue], 0); 
+    return fmaxf([[[[[[_database connection] resultSetByExecutingSQL:[NSString stringWithFormat:@"SELECT COUNT(*) FROM %@", _name] error:nil] recordsAtIndexes:[NSIndexSet indexSetWithIndex:0]] lastObject] valueForKey:@"count"] integerValue], 0); 
 }
 
 #pragma mark - 
 
-- (id <DBResultSet>)resultSetForRecordsAtIndexes:(NSIndexSet *)indexes 
-                                           error:(NSError *__autoreleasing *)error
+- (void)fetchResultSetForRecordsAtIndexes:(NSIndexSet *)indexes
+                                  success:(void (^)(id <DBResultSet> resultSet))success
+                                  failure:(void (^)(NSError *error))failure
 {
-    return [[_database connection] executeSQL:[NSString stringWithFormat:@"SELECT * FROM %@ LIMIT %d OFFSET %d ", _name, [indexes count], [indexes firstIndex]] error:nil];
+    [[_database connection] executeSQL:[NSString stringWithFormat:@"SELECT * FROM %@ LIMIT %d OFFSET %d", _name, [indexes count], [indexes firstIndex]] success:^(id<SQLResultSet> resultSet, __unused NSTimeInterval elapsedTime) {
+        if (success) {
+            success(resultSet);
+        }
+    } failure:^(NSError *error) {
+        if (failure) {
+            failure(error);
+        }
+    }];
 }
 
 #pragma mark -
 
-- (id <DBResultSet>)resultSetForQuery:(NSString *)query 
-                                error:(NSError *__autoreleasing *)error 
+- (void)fetchResultSetForQuery:(NSString *)query
+                       success:(void (^)(id <DBResultSet> resultSet, NSTimeInterval elapsedTime))success
+                       failure:(void (^)(NSError *error))failure
 {
-    return [[_database connection] executeSQL:query error:error];
+    [[_database connection] executeSQL:query success:^(id<SQLResultSet> resultSet, NSTimeInterval elapsedTime) {
+        if (success) {
+            success(resultSet, elapsedTime);
+        }
+    } failure:^(NSError *error) {
+        if (failure) {
+            failure(error);
+        }
+    }];    
+}
+
+#pragma mark -
+
+// TODO
+- (void)fetchResultSetForDimension:(NSExpression *)dimension
+                          measures:(NSArray *)measures
+                           success:(void (^)(id <DBResultSet> resultSet))success
+                           failure:(void (^)(NSError *error))failure
+{
+    return;
 }
 
 @end
@@ -377,25 +474,28 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
             encoding:(NSStringEncoding)encoding 
 {
     id value = nil;
-    switch (_type) {
-        case DBBooleanValue:
-            value = [NSNumber numberWithBool:((*(char *)bytes) == 't')];
-            break;
-        case DBIntegerValue:
-            value = [NSNumber numberWithInteger:[[[NSString alloc] initWithBytes:bytes length:length encoding:NSUTF8StringEncoding] integerValue]];
-            break;
-        case DBDecimalValue:
-            value = [NSNumber numberWithDouble:[[[NSString alloc] initWithBytes:bytes length:length encoding:NSUTF8StringEncoding] doubleValue]];
-            break;
-        case DBStringValue:
-            value = [[NSString alloc] initWithBytes:bytes length:length encoding:NSUTF8StringEncoding];
-            break;
-        case DBDateValue:
-        case DBDateTimeValue:
-            value = NSDateFromPostgreSQLTimestamp([[NSString alloc] initWithBytes:bytes length:length encoding:NSUTF8StringEncoding]);
-            break;
-        default:
-            break;
+    
+    if (bytes != NULL) {
+        switch (_type) {
+            case DBBooleanValue:
+                value = [NSNumber numberWithBool:((*(char *)bytes) == 't')];
+                break;
+            case DBIntegerValue:
+                value = [NSNumber numberWithInteger:[[[NSString alloc] initWithBytes:bytes length:length encoding:NSUTF8StringEncoding] integerValue]];
+                break;
+            case DBDecimalValue:
+                value = [NSNumber numberWithDouble:[[[NSString alloc] initWithBytes:bytes length:length encoding:NSUTF8StringEncoding] doubleValue]];
+                break;
+            case DBStringValue:
+                value = [[NSString alloc] initWithBytes:bytes length:length encoding:NSUTF8StringEncoding];
+                break;
+            case DBDateValue:
+            case DBDateTimeValue:
+                value = NSDateFromPostgreSQLTimestamp([[NSString alloc] initWithBytes:bytes length:length encoding:NSUTF8StringEncoding]);
+                break;
+            default:
+                break;
+        }
     }
 
     if (!value) {
@@ -484,7 +584,9 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
     
     NSMutableDictionary *mutableKeyedFields = [[NSMutableDictionary alloc] initWithCapacity:_fieldsCount];
     for (PostgreSQLField *field in _fields) {
-        [mutableKeyedFields setObject:field forKey:field.name];
+        if (field) {
+            [mutableKeyedFields setObject:field forKey:field.name];
+        }
     }
     _fieldsKeyedByName = mutableKeyedFields;
     
