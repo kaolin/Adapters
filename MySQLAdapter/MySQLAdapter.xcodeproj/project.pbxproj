@@ -233,11 +233,13 @@
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "MySQLAdapter/MySQLAdapter-Prefix.pch";
 				HEADER_SEARCH_PATHS = (
+					/opt/local/include/mysql5/mysql,
 					/usr/local/mysql/lib/,
 					/usr/local/lib,
 				);
 				INFOPLIST_FILE = "MySQLAdapter/MySQLAdapter-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
+				LIBRARY_SEARCH_PATHS = /opt/local/lib/mysql5/mysql;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				WRAPPER_EXTENSION = bundle;
 			};
@@ -249,11 +251,13 @@
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "MySQLAdapter/MySQLAdapter-Prefix.pch";
 				HEADER_SEARCH_PATHS = (
+					/opt/local/include/mysql5/mysql,
 					/usr/local/mysql/lib/,
 					/usr/local/lib,
 				);
 				INFOPLIST_FILE = "MySQLAdapter/MySQLAdapter-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
+				LIBRARY_SEARCH_PATHS = /opt/local/lib/mysql5/mysql;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				WRAPPER_EXTENSION = bundle;
 			};
