@@ -251,6 +251,7 @@ static dispatch_queue_t induction_mongo_adapter_queue() {
 }
 
 @synthesize name = _name;
+@synthesize database = _database;
 
 - (id)initWithDatabase:(MongoDBDatabase *)database
             attributes:(NSDictionary *)attributes

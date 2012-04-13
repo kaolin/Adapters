@@ -296,6 +296,7 @@ NSString * const MySQLErrorDomain = @"com.heroku.client.mysql.error";
 @implementation MySQLTable
 @synthesize name = _name;
 @synthesize stringEncoding = _stringEncoding;
+@synthesize database = _database;
 
 - (id)initWithDatabase:(id<SQLDatabase>)database 
                   name:(NSString *)name 

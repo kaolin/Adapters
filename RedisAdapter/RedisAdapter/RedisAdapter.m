@@ -159,6 +159,7 @@ static dispatch_queue_t induction_redis_adapter_queue() {
 
 @implementation RedisDataSource
 @synthesize name = _name;
+@synthesize database = _connection;
 
 - (id)initWithName:(NSString *)name
               keys:(NSArray *)keys

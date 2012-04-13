@@ -210,7 +210,7 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
             break;
     }    
     
-    return [[PostgreSQLResultSet alloc] initWithPGResult:pgresult];
+    return [[PostgreSQLResultSet alloc] initWithResult:pgresult];
 }
 
 - (void)executeSQL:(NSString *)SQL
@@ -231,7 +231,7 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
                 error = [[NSError alloc] initWithDomain:PostgreSQLErrorDomain code:status userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithUTF8String:PQresStatus(status)] forKey:NSLocalizedDescriptionKey]];            
                 break;
             default:
-                resultSet = [[PostgreSQLResultSet alloc] initWithPGResult:pgresult];
+                resultSet = [[PostgreSQLResultSet alloc] initWithResult:pgresult];
                 break;
         }
         
@@ -341,6 +341,7 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
 
 @implementation PostgreSQLTable
 @synthesize name = _name;
+@synthesize database = _database;
 @synthesize stringEncoding = _stringEncoding;
 
 - (id)initWithDatabase:(id <SQLDatabase>)database
@@ -431,7 +432,7 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
 @synthesize type = _type;
 @synthesize size = _size;
 
-+ (PostgreSQLField *)fieldInPGResult:(void *)pgresult 
++ (PostgreSQLField *)fieldInResult:(void *)pgresult 
                              atIndex:(NSUInteger)fieldIndex 
 {
     PostgreSQLField *field = [[PostgreSQLField alloc] init];
@@ -564,20 +565,21 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
     }    
 }
 
-- (id)initWithPGResult:(void *)pgresult {
+- (id)initWithResult:(void *)result
+{
     self = [super init];
     if (!self) {
         return nil;
     }
     
-    _pgresult = pgresult;
-    _tuplesCount = PQntuples(pgresult);
-    _fieldsCount = PQnfields(pgresult);
+    _pgresult = result;
+    _tuplesCount = PQntuples(result);
+    _fieldsCount = PQnfields(result);
     
     NSMutableArray *mutableFields = [[NSMutableArray alloc] initWithCapacity:_fieldsCount];
     NSIndexSet *fieldIndexSet = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0,_fieldsCount)];
     [fieldIndexSet enumerateIndexesWithOptions:NSEnumerationConcurrent usingBlock:^(NSUInteger fieldIndex, BOOL *stop) {
-        PostgreSQLField *field = [PostgreSQLField fieldInPGResult:pgresult atIndex:fieldIndex];
+        PostgreSQLField *field = [PostgreSQLField fieldInResult:result atIndex:fieldIndex];
         [mutableFields addObject:field];
     }];
     _fields = mutableFields;

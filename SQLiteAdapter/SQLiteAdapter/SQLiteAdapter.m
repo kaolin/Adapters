@@ -272,6 +272,7 @@ NSString * const SQLiteErrorDomain = @"com.heroku.client.postgresql.error";
 @implementation SQLiteTable
 @synthesize name = _name;
 @synthesize stringEncoding = _stringEncoding;
+@synthesize database = _database;
 
 - (id)initWithDatabase:(id<SQLDatabase>)database 
                   name:(NSString *)name 

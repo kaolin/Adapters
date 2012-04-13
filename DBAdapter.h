@@ -89,6 +89,8 @@ typedef enum {
 
 @protocol DBDataSource <NSObject>
 
+@property (readonly) id <DBDatabase> database;
+
 @property (readonly) NSString *name;
 @property (readonly) NSUInteger numberOfRecords;
 
@@ -135,6 +137,8 @@ typedef enum {
 #pragma mark -
 
 @protocol DBResultSet <NSObject>
+
+@property (readonly) id <DBDataSource> dataSource;
 
 - (NSUInteger)numberOfRecords;
 - (NSArray *)recordsAtIndexes:(NSIndexSet *)indexes;

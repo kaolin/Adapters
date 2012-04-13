@@ -35,8 +35,8 @@ extern NSString * const PostgreSQLErrorDomain;
 
 @interface PostgreSQLField : NSObject <SQLField>
 
-+ (PostgreSQLField *)fieldInPGResult:(void *)pgresult 
-                             atIndex:(NSUInteger)fieldIndex;
++ (PostgreSQLField *)fieldInResult:(void *)pgresult 
+                           atIndex:(NSUInteger)fieldIndex;
 
 - (id)objectForBytes:(const char *)bytes 
               length:(NSUInteger)length 
@@ -56,6 +56,6 @@ extern NSString * const PostgreSQLErrorDomain;
 
 @interface PostgreSQLResultSet : NSObject <SQLResultSet>
 
-- (id)initWithPGResult:(void *)pgresult;
+- (id)initWithResult:(void *)result;
 
 @end
