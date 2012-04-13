@@ -232,6 +232,10 @@
 			buildSettings = {
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "MySQLAdapter/MySQLAdapter-Prefix.pch";
+				HEADER_SEARCH_PATHS = (
+					/usr/local/mysql/lib/,
+					/usr/local/lib,
+				);
 				INFOPLIST_FILE = "MySQLAdapter/MySQLAdapter-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -244,6 +248,10 @@
 			buildSettings = {
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "MySQLAdapter/MySQLAdapter-Prefix.pch";
+				HEADER_SEARCH_PATHS = (
+					/usr/local/mysql/lib/,
+					/usr/local/lib,
+				);
 				INFOPLIST_FILE = "MySQLAdapter/MySQLAdapter-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
 				PRODUCT_NAME = "$(TARGET_NAME)";
