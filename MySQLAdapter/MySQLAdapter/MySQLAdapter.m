@@ -1,10 +1,24 @@
+// MySQLAdapter.m
 //
-//  MySQL.m
-//  Kirin
-//
-//  Created by Mattt Thompson on 12/01/31.
-//  Copyright (c) 2012年 Heroku. All rights reserved.
-//
+// Copyright (c) 2012 Mattt Thompson (http://mattt.me)
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #import "MySQLAdapter.h"
 
@@ -117,24 +131,27 @@ NSString * const MySQLErrorDomain = @"com.heroku.client.mysql.error";
         return NO;
     }
     
-    _database = [[self availableDatabases] lastObject];
-    mysql_select_db(_mysql_connection, [[_database name] UTF8String]);
+    if ([[NSString stringWithUTF8String:database] length] != 0) {
+        _database = [[MySQLDatabase alloc] initWithConnection:self name:[NSString stringWithUTF8String:database] stringEncoding:NSUTF8StringEncoding];
+        mysql_select_db(_mysql_connection, [[_database name] UTF8String]);
+        NSLog(@"database!");
+    }
     
     return YES;
 }
 
 - (BOOL)close:(NSError *__autoreleasing *)error {
-    if (!_mysql_connection) { 
+    if (_mysql_connection == NULL) { 
         return NO; 
     }
     
-	mysql_close(_mysql_connection);
+    mysql_close(_mysql_connection);
 
 	return YES;
 }
 
 - (BOOL)reset:(NSError *__autoreleasing *)error {
-    if (!_mysql_connection) { 
+    if (_mysql_connection == NULL) { 
         return NO; 
     }
     
@@ -210,6 +227,19 @@ NSString * const MySQLErrorDomain = @"com.heroku.client.mysql.error";
     }];
     
     return mutableDatabases;
+}
+
+- (void)connectToDatabase:(id <DBDatabase>)database error:(NSError **)error{
+    [self willChangeValueForKey:@"database"];
+    
+    if ([[_url lastPathComponent] isEqualToString:@""]) {
+        _url = [_url URLByAppendingPathComponent:[database name]];
+    } else {
+        _url = [[_url URLByDeletingLastPathComponent] URLByAppendingPathComponent:[database name]];
+    }
+    
+    [self open:error];
+    [self didChangeValueForKey:@"database"];
 }
 
 @end
@@ -329,6 +359,14 @@ NSString * const MySQLErrorDomain = @"com.heroku.client.mysql.error";
                                   success:(void (^)(id<DBResultSet>))success 
                                   failure:(void (^)(NSError *))failure 
 {
+    // TODO Proper empty set handling
+    if ([indexes count] == 0) {
+        if (success) {
+            success(nil);
+        }
+        return;
+    }
+    
     NSString *SQL = [NSString stringWithFormat:@"SELECT * FROM %@ LIMIT %d OFFSET %d ", _name, [indexes count], [indexes firstIndex]];
     [[_database connection] executeSQL:SQL success:^(id<SQLResultSet> resultSet, __unused NSTimeInterval elapsedTime) {
         if (success) {
@@ -358,6 +396,16 @@ NSString * const MySQLErrorDomain = @"com.heroku.client.mysql.error";
     }];
 }
 
+#pragma mark -
+
+- (void)fetchResultSetForDimension:(NSExpression *)dimension
+                          measures:(NSArray *)measures
+                           success:(void (^)(id <DBResultSet> resultSet))success
+                           failure:(void (^)(NSError *error))failure
+{
+    // TODO
+}
+
 @end
 
 #pragma mark -
@@ -385,6 +433,9 @@ NSString * const MySQLErrorDomain = @"com.heroku.client.mysql.error";
     
     MYSQL_FIELD *mysql_field = mysql_fetch_field_direct(result, (int)fieldIndex);
     field->_name = [NSString stringWithCString:mysql_field->name encoding:NSUTF8StringEncoding];
+    if (!field->_name) {
+        field->_name = @"";
+    }
     
     switch (mysql_field->type) {
         case MYSQL_TYPE_BIT:
@@ -544,6 +595,7 @@ NSString * const MySQLErrorDomain = @"com.heroku.client.mysql.error";
         [mutableFields addObject:field];
     }];
     _fields = mutableFields;
+    _fieldsCount = [_fields count];
     
     NSMutableDictionary *mutableKeyedFields = [[NSMutableDictionary alloc] initWithCapacity:_fieldsCount];
     for (MySQLField *field in _fields) {
