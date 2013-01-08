@@ -633,7 +633,7 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
     
     NSMutableArray *mutableFields = [[NSMutableArray alloc] initWithCapacity:_fieldsCount];
     NSIndexSet *fieldIndexSet = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0,_fieldsCount)];
-    [fieldIndexSet enumerateIndexesWithOptions:NSEnumerationConcurrent usingBlock:^(NSUInteger fieldIndex, BOOL *stop) {
+    [fieldIndexSet enumerateIndexesWithOptions:0 usingBlock:^(NSUInteger fieldIndex, BOOL *stop) {
         PostgreSQLField *field = [PostgreSQLField fieldInResult:result atIndex:fieldIndex];
         [mutableFields addObject:field];
     }];
