@@ -84,7 +84,11 @@ typedef enum {
 @optional
 
 @property (readonly) NSArray *availableDatabases;
+
 + (id <DBConnection>)connectionBySelectingDatabase:(id <DBDatabase>)database;
+
++ (NSString *)terminalCommandForSessionWithConnection:(id <DBConnection>)connection;
+
 
 @end
 
@@ -159,8 +163,6 @@ typedef enum {
 #pragma mark -
 
 @protocol DBResultSet <NSObject>
-
-//@property (readonly) id <DBDataSource> dataSource;
 
 - (NSUInteger)numberOfRecords;
 - (NSArray *)recordsAtIndexes:(NSIndexSet *)indexes;

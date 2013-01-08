@@ -157,7 +157,7 @@
 		F86943BA1505DA9800CD0C46 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0420;
+				LastUpgradeCheck = 0450;
 			};
 			buildConfigurationList = F86943BD1505DA9800CD0C46 /* Build configuration list for PBXProject "MongoDBAdapter" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -265,6 +265,7 @@
 		F86943D61505DA9800CD0C46 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "MongoDBAdapter/MongoDBAdapter-Prefix.pch";
 				INFOPLIST_FILE = "MongoDBAdapter/MongoDBAdapter-Info.plist";
@@ -277,6 +278,7 @@
 		F86943D71505DA9800CD0C46 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "MongoDBAdapter/MongoDBAdapter-Prefix.pch";
 				INFOPLIST_FILE = "MongoDBAdapter/MongoDBAdapter-Info.plist";

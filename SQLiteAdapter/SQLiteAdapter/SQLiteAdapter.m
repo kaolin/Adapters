@@ -316,7 +316,7 @@ NSString * const SQLiteErrorDomain = @"com.heroku.client.postgresql.error";
                                   success:(void (^)(id<DBResultSet>))success 
                                   failure:(void (^)(NSError *))failure 
 {
-    NSString *SQL = [NSString stringWithFormat:@"SELECT * FROM %@ LIMIT %d OFFSET %d ", _name, [indexes count], [indexes firstIndex]];
+    NSString *SQL = [NSString stringWithFormat:@"SELECT * FROM %@ LIMIT %ld OFFSET %ld ", _name, [indexes count], [indexes firstIndex]];
     [[_database connection] executeSQL:SQL success:^(id<SQLResultSet> resultSet, NSTimeInterval elapsedTime) {
         if (success) {
             success(resultSet);

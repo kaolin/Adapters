@@ -127,7 +127,7 @@
 		F86943861505C31900CD0C46 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0420;
+				LastUpgradeCheck = 0440;
 			};
 			buildConfigurationList = F86943891505C31900CD0C46 /* Build configuration list for PBXProject "SQLiteAdapter" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -230,6 +230,7 @@
 		F86943A21505C31900CD0C46 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "SQLiteAdapter/SQLiteAdapter-Prefix.pch";
 				INFOPLIST_FILE = "SQLiteAdapter/SQLiteAdapter-Info.plist";
@@ -242,6 +243,7 @@
 		F86943A31505C31900CD0C46 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "SQLiteAdapter/SQLiteAdapter-Prefix.pch";
 				INFOPLIST_FILE = "SQLiteAdapter/SQLiteAdapter-Info.plist";

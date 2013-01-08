@@ -164,7 +164,7 @@
 		F8804AAE14F301050072CFA5 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0420;
+				LastUpgradeCheck = 0450;
 			};
 			buildConfigurationList = F8804AB114F301050072CFA5 /* Build configuration list for PBXProject "RedisAdapter" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -273,6 +273,7 @@
 		F8804ACA14F301050072CFA5 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "RedisAdapter/RedisAdapter-Prefix.pch";
 				INFOPLIST_FILE = "RedisAdapter/RedisAdapter-Info.plist";
@@ -285,6 +286,7 @@
 		F8804ACB14F301050072CFA5 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "RedisAdapter/RedisAdapter-Prefix.pch";
 				INFOPLIST_FILE = "RedisAdapter/RedisAdapter-Info.plist";

@@ -218,7 +218,10 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
     switch (status) {
         case PGRES_BAD_RESPONSE:
         case PGRES_FATAL_ERROR:
-            *error = [[NSError alloc] initWithDomain:PostgreSQLErrorDomain code:status userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithUTF8String:PQresStatus(status)] forKey:NSLocalizedDescriptionKey]];
+            if (error) {
+                *error = [[NSError alloc] initWithDomain:PostgreSQLErrorDomain code:status userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithUTF8String:PQresStatus(status)] forKey:NSLocalizedDescriptionKey]];
+            }
+            
             return nil;
         default:
             break;
@@ -265,7 +268,7 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
 
 - (NSArray *)availableDatabases {
     NSMutableArray *mutableDatabases = [[NSMutableArray alloc] init];
-    [[[self resultSetByExecutingSQL:@"SELECT * FROM pg_database ORDER BY datname ASC" error:nil] tuples] enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+    [[[self resultSetByExecutingSQL:@"SELECT * FROM pg_database WHERE datacl IS NULL ORDER BY datname ASC" error:nil] tuples] enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
         PostgreSQLDatabase *database = [[PostgreSQLDatabase alloc] initWithConnection:self name:[(id <SQLTuple>)obj valueForKey:@"datname"] stringEncoding:NSUTF8StringEncoding];
         [mutableDatabases addObject:database];
     }];
@@ -273,9 +276,11 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
     return mutableDatabases;
 }
 
-- (void)connectToDatabase:(id <DBDatabase>)database error:(NSError **)error{
+- (id <DBConnection>)connectionBySelectingDatabase:(id <DBDatabase>)database{
+    NSError *error = nil;
+    
     [self willChangeValueForKey:@"database"];
-    [self close:error];
+    [self close:&error];
 
     if ([[_url lastPathComponent] isEqualToString:@""]) {
         _url = [_url URLByAppendingPathComponent:[database name]];
@@ -283,9 +288,23 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
         _url = [[_url URLByDeletingLastPathComponent] URLByAppendingPathComponent:[database name]];
     }
       
-    [self open:error];
+    [self open:&error];
     [self didChangeValueForKey:@"database"];
+    
+    return self;
 }
+
+
++ (NSString *)terminalCommandForSessionWithConnection:(id <DBConnection>)connection {
+    static NSString * const kPostgresPSQLCommandStringFormat = @"psql %@";
+    
+    if (!connection || ![connection url]) {
+        return nil;
+    }
+    
+    return [NSString stringWithFormat:kPostgresPSQLCommandStringFormat, [[connection url] absoluteString]];
+}
+
 
 @end
 
@@ -340,7 +359,7 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
 }
 
 - (NSUInteger)numberOfDataSourceGroups {
-    return 1;
+    return [_tables count] == 0 ? 0 : 1;
 }
 
 - (NSString *)dataSourceGroupAtIndex:(NSUInteger)index {
@@ -410,7 +429,7 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
         return;
     }
     
-    [[_database connection] executeSQL:[NSString stringWithFormat:@"SELECT * FROM %@ LIMIT %d OFFSET %d", _name, [indexes count], [indexes firstIndex]] success:^(id<SQLResultSet> resultSet, __unused NSTimeInterval elapsedTime) {
+    [[_database connection] executeSQL:[NSString stringWithFormat:@"SELECT * FROM %@ LIMIT %ld OFFSET %ld", _name, [indexes count], [indexes firstIndex]] success:^(id<SQLResultSet> resultSet, __unused NSTimeInterval elapsedTime) {
         if (success) {
             success(resultSet);
         }
@@ -662,11 +681,11 @@ static NSDate * NSDateFromPostgreSQLTimestamp(NSString *timestamp) {
 }
 
 - (NSUInteger)numberOfFields {
-    return _fieldsCount;
+    return [_fields count];
 }
 
 - (NSUInteger)numberOfRecords {
-    return _tuplesCount;
+    return [_tuples count];
 }
 
 - (NSArray *)recordsAtIndexes:(NSIndexSet *)indexes {

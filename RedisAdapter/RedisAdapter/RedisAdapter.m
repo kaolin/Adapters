@@ -44,7 +44,7 @@ static dispatch_queue_t induction_redis_adapter_queue() {
 }
 
 + (BOOL)canConnectToURL:(NSURL *)url {
-    return [[url scheme] isEqualToString:@"redis"];
+    return [[url scheme] isEqualToString:[self primaryURLScheme]];
 }
 
 + (void)connectToURL:(NSURL *)url 
@@ -261,7 +261,7 @@ static dispatch_queue_t induction_redis_adapter_queue() {
         
         if ([result isKindOfClass:[NSArray class]]) {
             [(NSArray*)result enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
-                [mutableRecords addObject:[[RedisKeyValuePair alloc] initWithKey:[NSString stringWithFormat:@"%i", idx] value:obj]];
+                [mutableRecords addObject:[[RedisKeyValuePair alloc] initWithKey:[NSString stringWithFormat:@"%li", idx] value:obj]];
             }];
         } else if (result) {
             [mutableRecords addObject:[[RedisKeyValuePair alloc] initWithKey:@"0" value:result]];
