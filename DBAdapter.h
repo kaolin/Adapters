@@ -24,6 +24,7 @@
 #import <AppKit/AppKit.h>
 
 typedef enum {
+    DBUnknownValue = 0,
     DBBooleanValue,
     DBIntegerValue,
     DBDecimalValue,
@@ -40,6 +41,24 @@ typedef enum {
     DBURLValue,
     DBIPAddressValue,
 } DBValueType;
+
+static NSString * NSStringFromDBValueType(DBValueType type) {
+    switch (type) {
+        case DBBooleanValue:
+            return NSLocalizedStringFromTable(@"Boolean", @"DBAdapter", nil);
+        case DBIntegerValue:
+            return NSLocalizedStringFromTable(@"Integer", @"DBAdapter", nil);
+        case DBDecimalValue:
+            return NSLocalizedStringFromTable(@"Decimal", @"DBAdapter", nil);
+        case DBStringValue:
+            return NSLocalizedStringFromTable(@"String", @"DBAdapter", nil);
+        case DBDateValue:
+        case DBDateTimeValue:
+            return NSLocalizedStringFromTable(@"Date", @"DBAdapter", nil);
+        default:
+            return @"Unknown";
+    }
+}
 
 typedef enum {
     DBSourceListIconDatabase,
