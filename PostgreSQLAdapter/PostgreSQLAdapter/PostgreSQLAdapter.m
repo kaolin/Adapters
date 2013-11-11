@@ -65,7 +65,8 @@ static NSString * PostgreSQLConnectionStringFromURL(NSURL *url) {
     }
     
     if ([url password]) {
-        [connectionString appendFormat:@"password='%@' ", [url password]];
+        //NOTE THAT THIS IS NOT THE PREFERRED WAY TO CONNECT WITH POSTGRESQL; RATHER THE URL SHOULD BE BUILT UP WITHOUT A PASSWORD AND THEN PASSED IN THROUGH A SEPARATE CALL
+        [connectionString appendFormat:@"password='%@' ", [[[url password] stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding] stringByReplacingOccurrencesOfString:@"'" withString:@"\\'"]];
     }
     
     if (![[url lastPathComponent] isEqual:@"/"]) {
